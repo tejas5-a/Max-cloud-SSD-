@@ -1,0 +1,6 @@
+{
+  "name": "MAX CLOUD SSD",
+  "description": "Unified Windows desktop cloud storage app with Google Drive integration, multi-cloud management, and transfer engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
