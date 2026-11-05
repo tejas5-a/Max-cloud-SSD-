@@ -1,0 +1,118 @@
+name: Build Windows x86 Executable
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build MAX Cloud SSD (Win-x86)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Verify .NET Environment
+        shell: pwsh
+        run: |
+          Write-Host "Installed .NET SDK Version:"
+          dotnet --version
+          dotnet --info
+
+      - name: Locate Target Project
+        id: locate_proj
+        shell: pwsh
+        run: |
+          # Check primary project path, followed by dynamic resolution if modified
+          $expectedPath = "src/MAXCloudSSD.App/MAXCloudSSD.App.csproj"
+          $resolvedPath = ""
+
+          if (Test-Path $expectedPath) {
+            $resolvedPath = $expectedPath
+          } else {
+            # Find WPF/App project if located elsewhere
+            $candidate = Get-ChildItem -Path . -Recurse -Filter "*MAXCloudSSD*.csproj" |
+              Where-Object { $_.FullName -notmatch "Tests" } |
+              Select-Object -First 1
+
+            if ($candidate) {
+              $resolvedPath = $candidate.FullName
+            } else {
+              $fallback = Get-ChildItem -Path . -Recurse -Filter "*.csproj" |
+                Where-Object { $_.FullName -notmatch "Tests" } |
+                Select-Object -First 1
+              if ($fallback) {
+                $resolvedPath = $fallback.FullName
+              }
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+            Write-Error "No valid .csproj project file found in the repository."
+            exit 1
+          }
+
+          Write-Host "Resolved Project Path: $resolvedPath"
+          "PROJECT_PATH=$resolvedPath" >> $env:GITHUB_ENV
+
+      - name: Restore Dependencies
+        shell: pwsh
+        run: |
+          dotnet restore "$env:PROJECT_PATH" -r win-x86
+
+      - name: Publish Self-Contained Win-x86 Executable
+        shell: pwsh
+        run: |
+          $outputDir = "${{ github.workspace }}/publish/win-x86"
+          Write-Host "Publishing to: $outputDir"
+
+          dotnet publish "$env:PROJECT_PATH" `
+            -c Release `
+            -r win-x86 `
+            --self-contained true `
+            -p:PlatformTarget=x86 `
+            -p:AssemblyName=MAXCloudSSD `
+            -o "$outputDir"
+
+      - name: Verify MAXCloudSSD.exe Artifact
+        shell: pwsh
+        run: |
+          $publishFolder = "${{ github.workspace }}/publish/win-x86"
+          $exePath = Join-Path $publishFolder "MAXCloudSSD.exe"
+
+          Write-Host "Verifying executable at: $exePath"
+
+          if (!(Test-Path $exePath)) {
+            Write-Error "Verification failed: MAXCloudSSD.exe was not generated."
+            Write-Host "Contents of publish directory:"
+            Get-ChildItem -Path $publishFolder | Format-Table Name, Length, LastWriteTime
+            exit 1
+          }
+
+          $fileInfo = Get-Item $exePath
+          Write-Host "SUCCESS: Executable verified successfully!"
+          Write-Host "File Name: $($fileInfo.Name)"
+          Write-Host "Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB ($($fileInfo.Length) bytes)"
+          Write-Host "Created/Modified: $($fileInfo.LastWriteTime)"
+
+      - name: Upload Windows x86 Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAXCloudSSD-Windows-x86
+          path: publish/win-x86/
+          if-no-files-found: error
+          retention-days: 30
