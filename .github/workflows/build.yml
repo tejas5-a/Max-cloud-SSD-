@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Install .NET 10 SDK (Requirement 2) along with .NET 8 runtime pack support
+      # Install .NET 10 SDK with .NET 8 runtime pack support
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -29,6 +29,15 @@ jobs:
             10.0.x
             8.0.x
           dotnet-quality: 'preview'
+
+      # Cache NuGet packages for fast incremental builds
+      - name: Cache NuGet Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Verify .NET Environment
         shell: pwsh
@@ -137,7 +146,8 @@ jobs:
 
           Write-Host "========================================="
           Write-Host "Publishing project: $env:PROJECT_PATH"
-          Write-Host "Target Runtime: win-x86 (32-bit Windows)"
+          Write-Host "Target Architecture: win-x86 (32-bit Windows PE)"
+          Write-Host "Deployment: Self-Contained"
           Write-Host "Destination: $outputDir"
           Write-Host "========================================="
 
@@ -146,6 +156,8 @@ jobs:
             -r win-x86 `
             --self-contained true `
             -p:PlatformTarget=x86 `
+            -p:RuntimeIdentifier=win-x86 `
+            -p:SelfContained=true `
             -p:AssemblyName=MAXCloudSSD `
             -p:EnableWindowsTargeting=true `
             -p:PublishTrimmed=false `
@@ -185,6 +197,7 @@ jobs:
           Write-Host "File Name: $($file.Name)"
           Write-Host "Size: $([math]::Round($file.Length / 1MB, 2)) MB ($($file.Length) bytes)"
           Write-Host "Target Architecture: Windows x86 (32-bit)"
+          Write-Host "Self-Contained Deployment: True"
           Write-Host "Path: $($file.FullName)"
 
       - name: Upload Windows x86 Build Artifact
