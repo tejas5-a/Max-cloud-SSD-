@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>MAXCloudSSD</AssemblyName>
+    <RootNamespace>MAXCloudSSD.App</RootNamespace>
+    <PlatformTarget>x86</PlatformTarget>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <Company>MAX CLOUD SSD</Company>
+    <Product>MAX CLOUD SSD</Product>
+    <Version>2.4.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MAXCloudSSD.Core\MAXCloudSSD.Core.csproj" />
+    <ProjectReference Include="..\MAXCloudSSD.Infrastructure\MAXCloudSSD.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

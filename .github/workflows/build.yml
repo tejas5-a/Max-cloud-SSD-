@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Try .NET 10 SDK first with preview quality support
+      # Install .NET 10 SDK (with preview quality)
       - name: Setup .NET 10 SDK
         id: setup_dotnet_10
         uses: actions/setup-dotnet@v4
@@ -30,8 +30,8 @@ jobs:
           dotnet-version: '10.0.x'
           dotnet-quality: 'preview'
 
-      # Graceful fallback if .NET 10 channel is temporarily unreachable on the runner
-      - name: Fallback to Available .NET SDK (if .NET 10 is not indexed)
+      # Fallback to .NET 8 LTS if .NET 10 preview is not indexed
+      - name: Fallback to Available .NET SDK (if .NET 10 not indexed)
         if: steps.setup_dotnet_10.outcome != 'success'
         uses: actions/setup-dotnet@v4
         with:
@@ -42,7 +42,7 @@ jobs:
       - name: Verify .NET Environment
         shell: pwsh
         run: |
-          Write-Host "=== Installed .NET SDK ==="
+          Write-Host "=== Active .NET SDK ==="
           dotnet --version
           dotnet --info
 
@@ -50,7 +50,7 @@ jobs:
         id: locate_proj
         shell: pwsh
         run: |
-          # 1. Check standard paths
+          # 1. Check primary known paths
           $candidatePaths = @(
             "src/MAXCloudSSD.App/MAXCloudSSD.App.csproj",
             "src/MAXCloudSSD/MAXCloudSSD.csproj",
@@ -66,14 +66,14 @@ jobs:
             }
           }
 
-          # 2. Dynamic discovery if not in standard path
+          # 2. Dynamic discovery if project was moved or named differently
           if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
-            $foundProj = Get-ChildItem -Path . -Recurse -Filter "*MAXCloudSSD*.csproj" |
+            $found = Get-ChildItem -Path . -Recurse -Filter "*MAXCloudSSD*.csproj" |
               Where-Object { $_.FullName -notmatch "Tests" } |
               Select-Object -First 1
 
-            if ($foundProj) {
-              $resolvedPath = $foundProj.FullName
+            if ($found) {
+              $resolvedPath = $found.FullName
             } else {
               $anyProj = Get-ChildItem -Path . -Recurse -Filter "*.csproj" |
                 Where-Object { $_.FullName -notmatch "Tests" } |
@@ -85,14 +85,12 @@ jobs:
           }
 
           if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
-            Write-Error "ERROR: No valid C# project (.csproj) found in the repository."
+            Write-Error "ERROR: No valid C# project (.csproj) found in repository."
             Get-ChildItem -Path . -Recurse -Depth 3 | Format-Table FullName
             exit 1
           }
 
-          Write-Host "Target Project Located: $resolvedPath"
-          
-          # Fix: Write UTF-8 to GITHUB_ENV to avoid PowerShell UTF-16 corruption
+          Write-Host "Target Project Found: $resolvedPath"
           "PROJECT_PATH=$resolvedPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Publish Self-Contained Win-x86 Executable
@@ -100,8 +98,10 @@ jobs:
         run: |
           $outputDir = "${{ github.workspace }}\publish\win-x86"
           New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-          Write-Host "Publishing target project: $env:PROJECT_PATH"
-          Write-Host "Destination: $outputDir"
+          
+          Write-Host "Publishing project: $env:PROJECT_PATH"
+          Write-Host "Target: win-x86 (32-bit Windows PE)"
+          Write-Host "Output Directory: $outputDir"
 
           dotnet publish "$env:PROJECT_PATH" `
             -c Release `
@@ -118,9 +118,9 @@ jobs:
           $publishFolder = "${{ github.workspace }}\publish\win-x86"
           $expectedExe = Join-Path $publishFolder "MAXCloudSSD.exe"
 
-          Write-Host "Checking for: $expectedExe"
+          Write-Host "Checking for executable: $expectedExe"
 
-          # If the project generated an exe under its default assembly name, copy it to MAXCloudSSD.exe
+          # Standardize name to MAXCloudSSD.exe if built under a different assembly name
           if (!(Test-Path $expectedExe)) {
             $foundExe = Get-ChildItem -Path $publishFolder -Filter "*.exe" | Select-Object -First 1
             if ($foundExe) {
@@ -131,7 +131,7 @@ jobs:
 
           if (!(Test-Path $expectedExe)) {
             Write-Error "CRITICAL: MAXCloudSSD.exe was not found in the output directory."
-            Write-Host "Directory contents:"
+            Write-Host "Contents of publish folder:"
             Get-ChildItem -Path $publishFolder | Format-Table Name, Length, LastWriteTime
             exit 1
           }
@@ -140,11 +140,11 @@ jobs:
           Write-Host "========================================="
           Write-Host "  BUILD AND VERIFICATION SUCCESSFUL!    "
           Write-Host "========================================="
-          Write-Host "Binary: $($file.Name)"
+          Write-Host "File Name: $($file.Name)"
           Write-Host "Size: $([math]::Round($file.Length / 1MB, 2)) MB ($($file.Length) bytes)"
           Write-Host "Path: $($file.FullName)"
-          Write-Host "Target Architecture: Windows x86 (32-bit)"
-          Write-Host "Deployment: Self-Contained"
+          Write-Host "Platform: Windows x86 (32-bit)"
+          Write-Host "Self-Contained: True"
 
       - name: Upload Windows x86 Build Artifact
         uses: actions/upload-artifact@v4
